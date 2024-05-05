@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Detection</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      background-color: #f0f0f0;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    p {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    #recordToggle, #stopButton {
+      font-size: 16px;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+
+    #stopButton {
+      background-color: #dc3545;
+    }
+
+    #recordToggle:hover, #stopButton:hover {
+      opacity: 0.8;
+    }
+
+    #audioPlayer {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Voice Detection</h1>
+  <p id="detectedNames">The detected name is: <%= detectedNames %><span id="detectedName"></span></p>
+
+  <button id="recordToggle">Start Recording</button>
+  <audio id="audioPlayer" controls></audio>
+
+  
+  <script src="socket.io.js"></script>
+  <script src="recorder.js"></script>
+  <script src="https://cdn.rawgit.com/mattdiamond/Recorderjs/08e7abd9/dist/recorder.js"></script>
+  <script src="recorder.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+    const recordToggleBtn = document.getElementById('recordToggle');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const detectedNameSpan = document.getElementById('detectedName');
+
+    let recorder;
+    let socket = io();
+    let isRecording = false;
+
+    recordToggleBtn.addEventListener('click', () => {
+        console.log('Button clicked');
+        if (!isRecording) {
+            startRecording();
+            recordToggleBtn.textContent = 'Stop Recording';
+        } else {
+            stopRecording();
+            recordToggleBtn.textContent = 'Start Recording';
+        }
+    });
+
+    function startRecording() {
+        console.log('Start recording');
+        isRecording = true;
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const input = audioContext.createMediaStreamSource(stream);
+
+                recorder = new Recorder(input);
+                recorder.record();
+
+                socket.emit('audio', 'start');
+            })
+            .catch((err) => {
+                console.error('Error accessing microphone:', err);
+                isRecording = false; // Reset recording flag on error
+                recordToggleBtn.textContent = 'Start Recording'; // Reset button text
+            });
+    }
+
+    function stopRecording() {
+        console.log('Stop recording');
+        isRecording = false;
+        recorder.stop();
+
+        recorder.exportWAV((blob) => {
+            const audioURL = URL.createObjectURL(blob);
+            audioPlayer.src = audioURL;
+
+            // Send the recorded audio to the server
+            sendAudioToServer(blob);
+            window.location.href = '/validate';
+        });
+
+        recorder.clear();
+        socket.emit('audio', 'stop');
+    }
+
+    function sendAudioToServer(audioBlob) {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.wav');
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData,
+        })
+        .then((response) => {
+            if (response.ok) {
+                console.log('Audio uploaded successfully');
+                // Optionally, perform actions after successful upload
+            } else {
+                console.error('Failed to upload audio:', response.statusText);
+                // Optionally, handle upload failure
+            }
+        })
+        .catch((error) => {
+            console.error('Error uploading audio:', error);
+            // Optionally, handle upload error
+        });
+    }
+});
+
+  </script>
+</body>
+</html>

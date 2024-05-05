@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Image</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    #captureButton {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    #captureButton:hover {
+      background-color: #0056b3;
+    }
+
+    #videoContainer,
+    #imageContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    #videoContainer video,
+    #imageContainer img {
+      max-width: 100%;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+    }
+
+    @media (max-width: 600px) {
+      #captureButton {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Capture Image</h1>
+  <form action="/detect" method="get">
+    <button id="captureButton">Capture Image</button>
+  </form>
+  
+  <div id="videoContainer"></div>
+  <div id="imageContainer" style="display:none;"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const captureButton = document.getElementById('captureButton');
+      const videoContainer = document.getElementById('videoContainer');
+      const imageContainer = document.getElementById('imageContainer');
+      
+      let stream = null;
+
+      // Access webcam
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(mediaStream => {
+          stream = mediaStream;
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.play();
+          videoContainer.appendChild(video);
+        })
+        .catch(err => console.error('Error accessing webcam:', err));
+
+      // Capture image
+      captureButton.addEventListener('click', () => {
+        const video = videoContainer.querySelector('video');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Stop the webcam stream
+        stream.getTracks().forEach(track => track.stop());
+
+        // Convert canvas to base64 image
+        const imageData = canvas.toDataURL('image/png');
+        
+        // Show captured image
+        const image = new Image();
+        image.src = imageData;
+        imageContainer.appendChild(image);
+        imageContainer.style.display = 'block';
+        
+        // Hide video container
+        videoContainer.style.display = 'none';
+
+        // Send imageData to backend to save
+        fetch('/save-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ image: imageData })
+        })
+        .then(response => {
+          if (response.ok) {
+            console.log('Image saved successfully');
+          } else {
+            console.error('Error saving image');
+          }
+        })
+        .catch(err => console.error('Error saving image:', err));
+      });
+    });
+  </script>
+</body>
+</html>
+
